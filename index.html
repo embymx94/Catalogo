@@ -285,43 +285,23 @@
     (function(){
         // ─── CONFIGURACIÓN ──────────────────────────────────────────
         const API_KEY = 'd4f8955e60014f1d910f302a822544ec';
-        const LOCAL_IP = localStorage.getItem('embyLocalIp') || 'http://192.168.1.64:8096';
         const REMOTE_URL = 'http://mxcuentas.ddns.net:8096';
 
         let currentType = 'movies';
         let allItems = [];
-        let currentBaseUrl = '';
+        let currentBaseUrl = REMOTE_URL;
 
         // DOM
         const grid = document.getElementById('catalogGrid');
 
-        // ─── UTILIDADES ─────────────────────────────────────────────
-        function getActiveUrl() {
-            return new Promise((resolve) => {
-                const localUrl = `${LOCAL_IP}/emby/System/Info/Public`;
-                fetch(localUrl, { headers: { 'X-Emby-Token': API_KEY }, signal: AbortSignal.timeout(2500) })
-                    .then(r => r.ok ? resolve(LOCAL_IP) : resolve(REMOTE_URL))
-                    .catch(() => resolve(REMOTE_URL));
-            });
-        }
-
-        function buildPosterUrl(itemId, baseUrl, type) {
-            if (type === 'Series') {
-                return `${baseUrl}/emby/Items/${itemId}/Images/Primary?maxHeight=400&quality=80&tag=${Date.now()}`;
-            }
-            return `${baseUrl}/emby/Items/${itemId}/Images/Primary?maxHeight=400&quality=80&tag=${Date.now()}`;
-        }
-
         // ─── OBTENER CATÁLOGO COMPLETO ─────────────────────────────
         async function fetchCatalog() {
             try {
-                const baseUrl = await getActiveUrl();
-                currentBaseUrl = baseUrl;
-                const url = `${baseUrl}/emby/Items?api_key=${API_KEY}&Recursive=true&IncludeItemTypes=Movie,Series&Fields=ProductionYear,DateCreated,OfficialRating,CommunityRating,ImageTags,DateAdded,PremiereDate&SortBy=DateCreated,ProductionYear&SortOrder=Descending`;
+                const url = `${REMOTE_URL}/emby/Items?api_key=${API_KEY}&Recursive=true&IncludeItemTypes=Movie,Series&Fields=ProductionYear,DateCreated,OfficialRating,CommunityRating,ImageTags,DateAdded,PremiereDate&SortBy=DateCreated,ProductionYear&SortOrder=Descending`;
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
-                return { items: data.Items || [], baseUrl };
+                return { items: data.Items || [], baseUrl: REMOTE_URL };
             } catch (e) {
                 console.error('Error al obtener catálogo:', e);
                 return { items: [], baseUrl: null };
@@ -397,32 +377,15 @@
                 const badgeLabel = item.Type === 'Movie' ? 'Película' : 'Serie';
                 const itemType = item.Type === 'Movie' ? 'Movie' : 'Series';
                 
-                const imageUrl = buildPosterUrl(item.Id, baseUrl, itemType);
+                const imageUrl = `${baseUrl}/emby/Items/${item.Id}/Images/Primary?maxHeight=400&quality=80&tag=${Date.now()}`;
 
-                let imageHtml = '';
-                if (itemType === 'Series') {
-                    const primaryUrl = `${baseUrl}/emby/Items/${item.Id}/Images/Primary?maxHeight=400&quality=80&tag=${Date.now()}`;
-                    const thumbUrl = `${baseUrl}/emby/Items/${item.Id}/Images/Thumb?maxHeight=400&quality=80&tag=${Date.now()}`;
-                    const logoUrl = `${baseUrl}/emby/Items/${item.Id}/Images/Logo?maxHeight=400&quality=80&tag=${Date.now()}`;
-                    
-                    imageHtml = `
-                        <img class="card-poster" 
-                             src="${primaryUrl}" 
-                             alt="${title}" 
-                             loading="lazy"
-                             onerror="this.onerror=null; this.src='${thumbUrl}';"
-                             onerror="this.onerror=null; this.src='${logoUrl}';"
-                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect fill=%22%2312121f%22 width=%22200%22 height=%22300%22/%3E%3Ctext x=%22100%22 y=%22150%22 text-anchor=%22middle%22 fill=%22%23333%22 font-size=%2216%22 font-family=%22sans-serif%22%3ESin imagen%3C/text%3E%3C/svg%3E'">
-                    `;
-                } else {
-                    imageHtml = `
-                        <img class="card-poster" 
-                             src="${imageUrl}" 
-                             alt="${title}" 
-                             loading="lazy"
-                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect fill=%22%2312121f%22 width=%22200%22 height=%22300%22/%3E%3Ctext x=%22100%22 y=%22150%22 text-anchor=%22middle%22 fill=%22%23333%22 font-size=%2216%22 font-family=%22sans-serif%22%3ESin imagen%3C/text%3E%3C/svg%3E'">
-                    `;
-                }
+                let imageHtml = `
+                    <img class="card-poster" 
+                         src="${imageUrl}" 
+                         alt="${title}" 
+                         loading="lazy"
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect fill=%22%2312121f%22 width=%22200%22 height=%22300%22/%3E%3Ctext x=%22100%22 y=%22150%22 text-anchor=%22middle%22 fill=%22%23333%22 font-size=%2216%22 font-family=%22sans-serif%22%3ESin imagen%3C/text%3E%3C/svg%3E'">
+                `;
 
                 html += `
                     <div class="card-item">
@@ -450,13 +413,14 @@
                     <div class="empty-state">
                         <i class="fas fa-exclamation-triangle"></i>
                         <h3>No se pudo conectar</h3>
-                        <p>Verifica la IP de Emby o revisa la conexión</p>
+                        <p>Verifica la conexión al servidor Emby</p>
                     </div>
                 `;
                 return;
             }
 
             allItems = items;
+            currentBaseUrl = baseUrl;
             render(items, baseUrl);
         }
 
